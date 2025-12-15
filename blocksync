@@ -116,22 +116,19 @@ if ! lsblk -nd "${sourceDisk}" > /dev/null 2>&1; then
     exit 1
 fi
 
-driveFound=false
+driveFound=1
 idx=0
-echo ${#backupDisks[@]}
-echo ${backupDisks[@]}
-
 while [ $idx -lt ${#backupDisks[@]} ]; do
   if lsblk -nd ${backupDisks[$idx]} > /dev/null 2>&1; then
     destDisk=${backupDisks[$idx]}
     echo "Sync-to drive found: ${destDisk}"
-    driveFound=true
+    driveFound=0
     break
   fi
   ((idx++))
 done
 
-if [ "$driveFound" = false ]; then
+if [ "$driveFound" = 1 ]; then
   echo "No destination drive found."
   exit 1
 fi
