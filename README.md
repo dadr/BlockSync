@@ -1,6 +1,6 @@
 # BlockSync
 Version 1.0 
-##Description##
+## Description
  BlockSync will sync a clone of a btrfs drive used for Urbackup.  This script is intended to be used to sync a primary backup disk drive with one or more additional drives that are not always attached to the system.  The idea is to allow these additional drives to be stored off-line and off-site - except when they are synced with the original backup drive.
  
 
@@ -13,7 +13,7 @@ So to backup the backup, another tool is needed, like dd for example.  However, 
 
 Enter blocksync-fast: a C program that essentially does what dd does, except it also tracks blocks that change, so that future copies become sync operations that only copy blocks that have changed in the original.
 
-##Dependencies##
+## Dependencies
  BlockSync has a major dependency on blocksync-fast, which is available here on github:  https://github.com/nethappen/blocksync-fast   Also, this script was developed and tested on Ubuntu 24.04.
  
 When you clone a btrfs volume, there is a risk that the filesystem will get confused if two disks with the same UUID are mounted.   There is some good news that btrfs has become more robust about this and supports "temporary fsid" specifically to deal with cloned drives as of linux kernel 6.6.  ( https://btrfs.readthedocs.io/en/latest/Feature-by-version.html )    To work with older kernels and to limit the dependency on this feature it is recommended that /etc/fstab have entries added to prevent the system from trying to mount or present the opportunity to mount a clone volume from the desktop.   An example of fstab showing both the backup drive as well as clone-to drives follows:
@@ -32,14 +32,16 @@ Regardless of the new feature or your fstab configuration, this script never mou
 
 To make use of this script you should edit the file and makes changes in the configuration block as described below.
 
-###Command line
+### Command line
 
 	blocksync [-h | -?]
 Prints out usage syntax
 
 	blocksync [-d clone-device | -t]
 Performs sync operation with options:
+
 -d provides a clone device to use in addition to the ones that are pre-configured  
+
 -t performs a "dry run" of the sync operation, printing the blocksync-fast command instead of running it.
 
 The program must be run as root, and will ask for authorization if not run that way.
@@ -52,7 +54,7 @@ That section includes the following items:
 
 **sourceMntPt** - the path to the mount point for sourceDisk
 
-**backupDisks **- a list of path names for unique devices of candidate clone-to disks 
+**backupDisks** - a list of path names for unique devices of candidate clone-to disks 
 
 **digestFileDir** - the directory where digest files are to be stored.  These track hash values for the blocks on the backup Disks
 
