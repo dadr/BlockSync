@@ -56,7 +56,7 @@ That section includes the following items:
 
 **backupDisks** - a list of path names for unique devices of candidate clone-to disks 
 
-**digestFileDir** - the directory where digest files are to be stored.  These track hash values for the blocks on the backup Disks
+**digestFileDir** - the directory where digest files are to be stored.  These track hash values for the blocks on the backup disks
 
 **hashAlgo** - the hashing algorithm to use to track changes in disk blocks
 
@@ -78,10 +78,10 @@ Do not use UUID because this script will clone the drive (like dd would) and UUI
  
  Also beware using **/dev/disk/by-id/usb-*** as that can name the adapter instead of the drive attached to it.
  
- If there is not a **wwn-** entry for the desired drive, then use the device that is listed by the lsblk link-id output column.  This is safe because it is composed of the interface type, model and  serial number of the device.  
+ If there is not a **wwn-** entry for the desired drive, then use the device that is listed by the lsblk id-link output column.  This is safe because it is composed of the interface type, model and  serial number of the device.  
+ 
 
-
- For hashAlgo, the default is probably a good choice.  To determine whether a better choice exists, use the command
+For **hashAlgo** , the default, "CRC32_RFC1510", is probably a good choice.  To determine whether a better choice exists, use the command
  
 	 blocksync-fast --benchmark-algos
  
