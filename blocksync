@@ -34,7 +34,7 @@ sourceDisk="/dev/disk/by-id/wwn-0x5000c500744661fa"
 sourceMntPt="/mnt/backup"
 backupDisks=(
             "/dev/disk/by-id/wwn-0x5000c500e98c3884"
-            "/dev/disk/by-id/ata-OOS14000G_0007QVYW"
+            "/dev/disk/by-id/wwn-0x5000c5007446c38b"
 )
 digestFileDir="/var/cache/blocksync/"
 hashAlgo="CRC32_RFC1510"
@@ -165,7 +165,7 @@ if mount | grep -q "${sourceMntPt}"; then
 fi    
 
 #  execute blocksync to clone the backup disk
-if [ $dryrun ]; then
+if [ $dryrun = 0 ]; then
     echo Dryrun blocksync-fast from $sourceDisk to $destDisk with digest: $digest_file and $hashAlgo algorithm
 else 
     blocksync-fast -s ${sourceDisk} -d ${destDisk} -f ${digest_file} --buffer-size=1G --algo="${hashAlgo}" --progress
@@ -175,7 +175,7 @@ fi
 # remount the backup disk
 mount "${sourceDisk}"-part1 "${sourceMntPt}"
 remounted=$?
-if [ $remounted ]; then 
+if [ $remounted = 0 ]; then 
    echo remounted backup drive at "${sourceMntPt}"
 else
    echo failed to remount backup drive at "${sourceMntPt}"
