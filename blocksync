@@ -1,0 +1,199 @@
+#!/bin/bash
+
+# blocksync - automation script for urbackup to backup a btrfs storage volume mnt/backup to one or more 
+#             separate hard drives that are swapped in and out of the system.  It will "clone" 
+#             the backup drive to the other drive along with UUIDs.  So care must be taken not to mount
+#             both at the same time.  If more than one possible destination drive is attached, then the first
+#             one found from the list is used.  To override this, a destination drive can be provided as an
+#             argument to the program.  e.g. blocksync /dev/sda   
+#             This program must be run as root.
+# Dependencies: this script makes use of blocksync-fast which is found here:
+#             https://github.com/nethappen/blocksync-fast 
+#             the script is also loosely coupled to urbackup as the backup process that manages a 
+#             btrfs backup volume.  Comments below indicate where to modify or remove urbackup.
+#             
+# License:    this script is provided under Apache license 2.0 - except the hms() function which
+#             is/was published at the link shown below without mentioning a license.
+#
+# Configuration: Strongly recommend to use /dev/disk/by-id/wwn-* device to name the drive.  
+# Do not use UUID because this script will clone the drive (like dd would) and UUID will not be unique.
+# You *can* use /dev/sda etc., but it can change if hardware changes between boots.  
+# Beware using /dev/disk/by-id/usb-* as that can name the adapter instead of the drive attached to it.
+# If there is not a wwn- entry, then use the device that is composed of the interface type, model and 
+# serial, e.g. ata-OOS14000G_000BJQZD
+#
+# To determine the proper hash algorithm run: blocksync-fast --benchmark-algos
+# The results will show both the speed and bytes for the algorithm which will affect run time and
+# digest file size, respectively.
+#
+# Finally, indicate the drive, not the partition.
+
+# Configuration Block
+
+sourceDisk="/dev/disk/by-id/wwn-0x5000c500744661fa"
+sourceMntPt="/mnt/backup"
+backupDisks=(
+            "/dev/disk/by-id/wwn-0x5000c500e98c3884"
+            "/dev/disk/by-id/ata-OOS14000G_0007QVYW"
+)
+digestFileDir="/var/cache/blocksync/"
+hashAlgo="CRC32_RFC1510"
+
+# End of configuration block
+
+
+# Define hms() function as described here: https://www.shellscript.sh/examples/hms/
+hms()
+{
+  # Convert Seconds to Hours, Minutes, Seconds
+  # Optional second argument of "long" makes it display
+  # the longer format, otherwise short format.
+  local SECONDS H M S MM H_TAG M_TAG S_TAG
+  SECONDS=${1:-0}
+  let S=${SECONDS}%60
+  let MM=${SECONDS}/60 # Total number of minutes
+  let M=${MM}%60
+  let H=${MM}/60
+  
+  if [ "$2" == "long" ]; then
+    # Display "1 hour, 2 minutes and 3 seconds" format
+    # Using the x_TAG variables makes this easier to translate; simply appending
+    # "s" to the word is not easy to translate into other languages.
+    [ "$H" -eq "1" ] && H_TAG="hour" || H_TAG="hours"
+    [ "$M" -eq "1" ] && M_TAG="minute" || M_TAG="minutes"
+    [ "$S" -eq "1" ] && S_TAG="second" || S_TAG="seconds"
+    [ "$H" -gt "0" ] && printf "%d %s " $H "${H_TAG},"
+    [ "$SECONDS" -ge "60" ] && printf "%d %s " $M "${M_TAG} and"
+    printf "%d %s\n" $S "${S_TAG}"
+  else
+    # Display "01h02m03s" format
+    [ "$H" -gt "0" ] && printf "%02d%s" $H "h"
+    [ "$M" -gt "0" ] && printf "%02d%s" $M "m"
+    printf "%02d%s\n" $S "s"
+  fi
+}
+
+
+# Start
+dryrun=1
+help=1
+
+while getopts "d:ht?" option; do
+    case $option in
+        d) CLI_Disk=${OPTARG};;
+        h) help=0;; 
+        t) dryrun=0;;
+        ?) help=0;;
+    esac
+done
+
+echo $0 version 1.0 - 2005.12.14
+if [ $help = 0 ]; then 
+    echo Usage: $0 '[-d sync-to-drive | -h | -t ]'
+    echo 'This program syncs a backup drive to one or more "clone" drives'
+    echo '       d - specify full patch to a drive to sync to'
+    echo '       h - shows this help'
+    echo '       t - dry run - print sync command rather than run it'
+    exit
+fi
+
+# Make sure this is running as root
+if [ "$EUID" -ne 0 ]; then
+    echo "Restarting with sudo"
+    script_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
+    sudo "$script_dir"/"$0 $@"
+    exit $?
+fi
+
+STARTTIME=`date +%s`
+
+# Add command line argument to list of potential drives to use for sync destination
+backupDisks=(${CLI_Disk} ${backupDisks[@]})
+
+#  Test the drives to make sure they are attached and recognized
+if ! lsblk -nd "${sourceDisk}" > /dev/null 2>&1; then
+    echo "Source disk does not appear to exist at "${sourceDisk}"  -- Exiting!"
+    exit 1
+fi
+
+driveFound=false
+idx=0
+echo ${#backupDisks[@]}
+echo ${backupDisks[@]}
+
+while [ $idx -lt ${#backupDisks[@]} ]; do
+  if lsblk -nd ${backupDisks[$idx]} > /dev/null 2>&1; then
+    destDisk=${backupDisks[$idx]}
+    echo "Sync-to drive found: ${destDisk}"
+    driveFound=true
+    break
+  fi
+  ((idx++))
+done
+
+if [ "$driveFound" = false ]; then
+  echo "No destination drive found."
+  exit 1
+fi
+
+# Create digest file directory if it does not exist
+if ! [ -d "${digestFileDir}" ]; then
+    mkdir -p "${digestFileDir}"
+fi   
+# drives can be referenced multiple ways, but want just one digest file, regardless,
+# so determine the serial of the drive and base the digest file name on that. 
+serial=$(lsblk -o serial -n "${destDisk}")
+digest_file="${digestFileDir}${serial}.digest"
+ 
+
+#  Turn off UrBackup so that it does not try to use the /mnt/backup drive
+#  while it is being synced.
+#  To remove the urbackup dependency remove or modify this section
+echo "Stopping Urbackup service"
+systemctl stop urbackupsrv
+while systemctl is-active --quiet urbackupsrv; do
+    sleep 1
+done
+
+#  Unmount the backup drive --force is needed if it's also a Samba share.
+echo "Unmounting backup drive"
+umount --force ${sourceMntPt}
+if mount | grep -q "${sourceMntPt}"; then
+    echo "Failed to unmount backup drive"
+    lsof | grep "${sourceMntPt}"
+    read -p "Blocksync failed, restart urbackupsrv (Y|n): " input; input=${input:-"Y"}
+    case $input in
+        [Yy] ) systemctl start urbackupsrv; exit 1;;
+        * ) exit 1;;
+    esac
+fi    
+
+#  execute blocksync to clone the backup disk
+if [ $dryrun ]; then
+    echo Dryrun blocksync-fast from $sourceDisk to $destDisk with digest: $digest_file and $hashAlgo algorithm
+else 
+    blocksync-fast -s ${sourceDisk} -d ${destDisk} -f ${digest_file} --buffer-size=1G --algo="${hashAlgo}" --progress
+    synced=$?
+fi
+
+# remount the backup disk
+mount "${sourceDisk}"-part1 "${sourceMntPt}"
+remounted=$?
+if [ $remounted ]; then 
+   echo remounted backup drive at "${sourceMntPt}"
+else
+   echo failed to remount backup drive at "${sourceMntPt}"
+fi
+
+
+# restart UrBackup
+# To remove the urbackup dependency remove or modify this section
+echo Restarting UrBackup
+systemctl start urbackupsrv
+restarted=$?
+
+echo -n "Backup took "; hms $((`date +%s`-STARTTIME))
+echo "Disk usage is:"
+btrfs filesystem df -H "${sourceMntPt}"
+
+exit $((${synced} + ${remounted} + ${restarted}))
