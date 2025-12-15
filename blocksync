@@ -87,7 +87,7 @@ while getopts "d:ht?" option; do
     esac
 done
 
-echo $0 version 1.0 - 2005.12.14
+echo `basename $0` version 1.0 - 2005.12.14
 if [ $help = 0 ]; then 
     echo Usage: $0 '[-d sync-to-drive | -h | -t ]'
     echo 'This program syncs a backup drive to one or more "clone" drives'
@@ -100,8 +100,7 @@ fi
 # Make sure this is running as root
 if [ "$EUID" -ne 0 ]; then
     echo "Restarting with sudo"
-    script_dir=$( cd -- "$( dirname -- "${BASH_SOURCE[0]}" )" &> /dev/null && pwd )
-    sudo "$script_dir"/"$0 $@"
+    sudo $0 $@
     exit $?
 fi
 
