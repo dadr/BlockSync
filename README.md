@@ -22,8 +22,8 @@ When you clone a btrfs volume, there is a risk that the filesystem will get conf
 	/dev/disk/by-id/ata-OOS14000G_000BJQZD-part1 /mnt/backup btrfs nosuid,nodev,noexec 0 0
 	
 	# Do not mount the drives that are clones of the backup drive
-	/dev/disk/by-id/ata-OOS14000G_0007QVYW-part1 /media/clone1/	btrfs defaults,noauto	00
-	/dev/disk/by-id/ata-OOS14000G_000HPZ44-part1 /media/clone2/	btrfs defaults,noauto	00
+	/dev/disk/by-id/ata-OOS14000G_0007QVYW-part1 /mnt/clone1/	btrfs defaults,noauto	00
+	/dev/disk/by-id/ata-OOS14000G_000HPZ44-part1 /mnt/clone2/	btrfs defaults,noauto	00
 	
 
 Regardless of the new feature or your fstab configuration, this script never mounts the cloned-to drive.
